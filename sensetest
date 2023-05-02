@@ -1,0 +1,19 @@
+from sense_hat import SenseHat
+from time import sleep
+
+sense = SenseHat()
+
+while True:
+	bearing = sense.get_compass()
+	#sense.show_message(bearing)
+	if bearing <45  or bearing > 315:
+	   sense.show_letter('N')
+	elif bearing <135:
+	   sense.show_letter('E')
+	elif bearing <225:
+	   sense.show_letter('S')
+	else:
+	   sense.show_letter('W') 
+	print(bearing)
+	
+
