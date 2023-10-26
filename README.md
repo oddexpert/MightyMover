@@ -1,6 +1,6 @@
 # MightyMover
 Senior Design Project of an autonomous auto-following wagon.
-#The Problem
+## The Problem
 Everyone has trouble carrying objects.  ​
 
 ​
@@ -8,7 +8,7 @@ What solutions are there for the physically challenged?​
 
 
 Even wagons need to be pushed and pulled which causes strain on the body.​
-#The Solution​
+## The Solution​
 A product that will get the user's items to and from without interacting with the cart.​
 
 ​
