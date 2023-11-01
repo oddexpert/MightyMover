@@ -24,7 +24,6 @@ client_sock, client_info = server_sock.accept()
 print("Accepted connection from", client_info)
 while True:
     try:
-        mover.setAngle()
         mover.handle_client(client_sock)
         #time.sleep(1)
     except KeyboardInterrupt:

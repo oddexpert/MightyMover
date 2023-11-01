@@ -24,6 +24,16 @@ class MightyMover():
     def handle_client(self, client_sock):
         #print("Accepted connection from", client_sock.getpeername())
         while True:
+            event = self.c211.readline()
+            #print(event)
+            if event:
+                event = event.decode('utf-8')
+                event = event.split(",")
+            if len(event) > 2:
+                #Eddystone ID, RSSI, Azimuth, Elevation, ...
+                self.azi_angle = int(event[3]) + 90
+                self.ele_angle = int(event[4]) + 90
+                self.rssi = int(event[1])
             for message_to_send in [str(self.rssi), "AZ" + str(self.azi_angle), "EL" + str(self.ele_angle)]:
                 # Send each predefined message to the connected device
                 client_sock.send(message_to_send.encode())
