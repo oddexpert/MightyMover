@@ -9,6 +9,8 @@ c211 = serial.Serial("/dev/ttyUSB0", 115200, 8, 'N', 1, timeout = 1)
 arduino = serial.Serial("/dev/ttyACM0", 9600, 8, 'N', 1, timeout = 1)
 angle = 0
 
+#lemme post
+
 def fake_serial_read(device):
     return random.randint(30,150)
 
