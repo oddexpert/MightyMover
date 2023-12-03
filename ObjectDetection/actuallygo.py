@@ -1,3 +1,4 @@
+
 # Import packages
 import os
 import argparse
@@ -5,26 +6,23 @@ import numpy as np
 import importlib.util
 import time
 import cv2
-from picamera.array import PiRGBArray
-from picamera import PiCamera
+import RPi.GPIO as GPIO
+from picamera2 import Picamera2, Preview
 
 # Define PictureTaker class to capture pictures from the PiCamera
 class PictureTaker:
     def __init__(self):
-        self.camera = PiCamera()
-        self.camera.awb_mode = 'off'
-        self.camera.awb_gains = (1.2, 1.5)
-        self.camera.resolution = (640, 480)
-        self.rawCapture = PiRGBArray(self.camera)
-        self.camera.start_preview()
+        self.camera = Picamera2()
+        preview_config = self.camera.create_preview_configuration(main={"format": 'XRGB8888', "size": (640, 480)})
+        self.camera.configure(preview_config)
+        self.camera.start()
 
     def capture_picture(self):
-        self.camera.capture(self.rawCapture, format="bgr")
-        frame = self.rawCapture.array
+        frame = self.camera.capture_array()
         return frame
 
     def close(self):
-        self.rawCapture.truncate(0)
+        cv2.destroyAllWindows()
         self.camera.close()
 
 # Define and parse input arguments
@@ -38,11 +36,12 @@ imW, imH = resW, resH
 
 # Import TensorFlow libraries
 # If tflite_runtime is installed, import interpreter from tflite_runtime, else import from regular tensorflow
+#tflite = 'home/pi/objectd/tflite1/tflite1-env/lib/python3.11/site-packages/tflite-runtime'
 pkg = importlib.util.find_spec('tflite_runtime')
 if pkg:
     from tflite_runtime.interpreter import Interpreter
 else:
-    from tensorflow.lite.python.interpreter import Interpreter       
+    from tensorflow.lite.python.interpreter import Interpreter    
 
 # Get path to current working directory
 CWD_PATH = os.getcwd()
@@ -78,7 +77,7 @@ floating_model = (input_details[0]['dtype'] == np.float32)
 input_mean = 127.5
 input_std = 127.5
 
-print(input_details[0]['shape'])
+#print(input_details[0]['shape'])
 
 # Check output layer name to determine if this model was created with TF2 or TF1,
 # because outputs are ordered differently for TF2 and TF1 models
@@ -97,6 +96,13 @@ legs=0
 # Initialize the picture taker
 picture_taker = PictureTaker()
 
+for_pin = 23
+stop_pin = 24
+
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(for_pin,GPIO.OUT)
+GPIO.setup(stop_pin, GPIO.OUT)
+
 try:
 
     while True:
@@ -106,10 +112,13 @@ try:
         # Acquire frame and resize to expected shape [1xHxWx3]
         frame_resized = cv2.resize(frame, (300, 300))
         input_data = np.expand_dims(frame_resized, axis=0)
-
+        input_data = input_data[:,:,:,0:3]
+        #print(np.shape(input_data))
         # Normalize pixel values if using a floating model (i.e., if the model is non-quantized)
-        if floating_model:
-            input_data = (np.float32(input_data) - input_mean) / input_std
+        #if floating_model:
+        #    input_data = (np.float32(frame_resized) - input_mean) / input_std
+        #else:
+        #    input_data = frame_resized
 
         # Perform the actual detection by running the model with the image as input
         interpreter.set_tensor(input_details[0]['index'], input_data)
@@ -139,12 +148,6 @@ try:
                 ymax = int(min(480, (boxes[i][2] * 480)))
                 xmax = int(min(640, (boxes[i][3] * 640)))
 
-                # Calculate the four corners of the bounding box
-                # top_left = (xmin, ymin)
-                # top_right = (xmax, ymin)
-                # bottom_left = (xmin, ymax)
-                # bottom_right = (xmax, ymax)
-
                 # Calculate Width, to figure out if person's leg or legs is detected
                 width = xmax - xmin
 
@@ -153,13 +156,12 @@ try:
                 frame_labels["ymax"].append(ymax)
                 frame_labels["width"].append(width)
 
-        key = cv2.waitKey(1) & 0xFF
-        picture_taker.rawCapture.truncate(0)
-
         # Make Decisions
         if "person" in frame_labels['label']:
             if len(frame_labels['label']) > 2:
                 print("Object Detected")
+                GPIO.output(for_pin, GPIO.LOW)
+                GPIO.output(stop_pin, GPIO.HIGH)
             else:
                 # Get index of person
                 person_indices = [i for i, label in enumerate(frame_labels['label']) if label == "person"]
@@ -167,23 +169,31 @@ try:
                 if all(data['ymax'] > 300 for data in person_data):
                     if len(person_data) == 1:
                         print("one person and under threshold")
+                        GPIO.output(for_pin, GPIO.HIGH)
+                        GPIO.output(stop_pin, GPIO.LOW)
                     else:
                         if all(data['width'] < 125 for data in person_data):
-                            print("legs, but go anyways")
+                            GPIO.output(for_pin, GPIO.HIGH)
+                            GPIO.output(stop_pin, GPIO.LOW)
                         else:
                             print("multiple people")
+                            GPIO.output(for_pin, GPIO.LOW)
+                            GPIO.output(stop_pin, GPIO.LOW)
                 else:
                     print("ymax not under 300")
+                    GPIO.output(for_pin, GPIO.LOW)
+                    GPIO.output(stop_pin, GPIO.HIGH)
         else :
             print("person not in frame")
-        
-except KeyboardInterrupt:
-    picture_taker.close()
-    pass 
+            GPIO.output(for_pin, GPIO.LOW)
+            GPIO.output(stop_pin, GPIO.HIGH)
+
+        #picture_taker.rawCapture.truncate(0)
 
 # This was taken out for debugging purposes
-# except Exception as e: 
-#     picture_taker.close()
+#except Exception as e: 
+#    picture_taker.close()
+#    print(e)
     
 finally:
     picture_taker.close()
